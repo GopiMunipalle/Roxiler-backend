@@ -1,4 +1,6 @@
-GET http://localhost:5004?month=09
+GET http://localhost:5004
+###
+GET http://localhost:5004/all?month=09
 
 ###
 GET http://localhost:5004/statistics?month=07

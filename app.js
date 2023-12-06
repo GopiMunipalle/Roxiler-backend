@@ -27,11 +27,12 @@ const initializeDbAndServer = async () => {
 };
 
 initializeDbAndServer();
+
 //sample
 app.get("/", async (req, res) => {
   try {
     const allTransactions = await db.all(
-      `SELECT id, title, price FROM products`
+      `SELECT id, title,category, price FROM products`
     );
     res.json({ allTrans: allTransactions });
   } catch (err) {
