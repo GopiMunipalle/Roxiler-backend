@@ -3,11 +3,12 @@ const path = require("path");
 const { open } = require("sqlite");
 const sqlite3 = require("sqlite3");
 const axios = require("axios");
+const cors = require("cors");
 let db = null;
+const app = express();
+app.use(cors());
 
 const dbPath = path.join(__dirname, "database.db");
-
-const app = express();
 const port = process.env.PORT || 5004;
 
 const initializeDbAndServer = async () => {
@@ -26,8 +27,21 @@ const initializeDbAndServer = async () => {
 };
 
 initializeDbAndServer();
-
+//sample
 app.get("/", async (req, res) => {
+  try {
+    const allTransactions = await db.all(
+      `SELECT id, title, price FROM products`
+    );
+    res.json({ allTrans: allTransactions });
+  } catch (err) {
+    console.log(err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+//all?month=02
+app.get("/all", async (req, res) => {
   const { month, search = "" } = req.query;
   const secureSearch = "%" + search + "%";
   try {
@@ -43,6 +57,7 @@ app.get("/", async (req, res) => {
   }
 });
 
+///statistics?month=04
 app.get("/statistics", async (req, res) => {
   const { month } = req.query;
 
@@ -78,42 +93,49 @@ app.get("/statistics", async (req, res) => {
   }
 });
 
+///barchart?month=04
 app.get("/barchart", async (req, res) => {
-  const { month } = req.query;
-
-  const priceRanges = [
-    { min: 0, max: 100 },
-    { min: 101, max: 200 },
-    { min: 201, max: 300 },
-    { min: 301, max: 400 },
-    { min: 401, max: 500 },
-    { min: 501, max: 600 },
-    { min: 601, max: 700 },
-    { min: 701, max: 800 },
-    { min: 801, max: 900 },
-    { min: 901, max: Number.MAX_SAFE_INTEGER },
-  ];
-
   try {
+    const { month } = req.query;
+
+    const priceRanges = [
+      { min: 0, max: 100 },
+      { min: 101, max: 200 },
+      { min: 201, max: 300 },
+      { min: 301, max: 400 },
+      { min: 401, max: 500 },
+      { min: 501, max: 600 },
+      { min: 601, max: 700 },
+      { min: 701, max: 800 },
+      { min: 801, max: 900 },
+      { min: 901, max: Number.MAX_SAFE_INTEGER },
+    ];
+
     const priceRangeCounts = [];
     for (const range of priceRanges) {
-      const rangeQuery = `
+      const { min, max } = range;
+      const countQuery = `
         SELECT COUNT(*) AS count
         FROM products
-        WHERE strftime('%m', dateOfSale) = '${month}'
-        AND price BETWEEN ${range.min} AND ${range.max}`;
+        WHERE CAST(strftime('%m', dateOfSale) AS INTEGER) = ${month}
+        AND price BETWEEN ${min} AND ${max}
+      `;
 
-      const { count } = await db.get(rangeQuery);
-      priceRangeCounts.push({ ...range, count });
+      const result = await db.get(countQuery);
+
+      priceRangeCounts.push({
+        priceRange: `${min}-${max > Number.MAX_SAFE_INTEGER ? "above" : max}`,
+        count: result.count,
+      });
     }
-
     res.json({ priceRangeCounts });
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ error: "Internal Server Error" });
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
+///piechart?month=04
 app.get("/piechart", async (req, res) => {
   const { month } = req.query;
 
@@ -126,10 +148,10 @@ app.get("/piechart", async (req, res) => {
 
     const categoryCounts = await db.all(categoryCountsQuery);
 
-    const categories = {};
-    categoryCounts.forEach((row) => {
-      categories[row.category] = row.itemCount;
-    });
+    const categories = categoryCounts.map((row) => ({
+      categoryName: row.category,
+      categoryCount: row.itemCount,
+    }));
 
     res.json({ categoryCounts: categories });
   } catch (err) {
@@ -138,6 +160,7 @@ app.get("/piechart", async (req, res) => {
   }
 });
 
+///combinedData?month=04
 app.get("/combinedData", async (req, res) => {
   try {
     const statisticsPromise = axios.get("http://localhost:5004/statistics", {
